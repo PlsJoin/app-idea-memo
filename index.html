@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>アプリアイデアメモ帳</title>
+<meta name="theme-color" content="#b7791f">
+<meta name="description" content="思いついたアプリのアイデアをメモして貯める、PCにインストールできるPWAアプリ">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: "Hiragino Maru Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif; background:#fdf6e3; color:#3d2c12; }
+  header { background:#b7791f; color:#fff; padding:18px 16px; }
+  header h1 { margin:0; font-size:22px; }
+  header p { margin:6px 0 0; font-size:13px; opacity:.92; }
+  #installBtn { display:none; margin-top:10px; background:#fff; color:#8a5a12; border:0; border-radius:999px; padding:8px 16px; font-weight:700; cursor:pointer; }
+  main { max-width:860px; margin:0 auto; padding:16px; }
+  .card { background:#fffdf7; border:1px solid #eadfc2; border-radius:14px; padding:16px; box-shadow:0 2px 8px rgba(90,60,10,.08); margin-bottom:16px; }
+  label { display:block; font-size:13px; font-weight:700; margin:10px 0 4px; }
+  input[type=text], textarea, select { width:100%; padding:10px; border:1px solid #d8c690; border-radius:10px; font-size:15px; background:#fff; }
+  textarea { min-height:70px; }
+  button.primary { margin-top:14px; width:100%; background:#b7791f; color:#fff; border:0; border-radius:10px; padding:12px; font-size:16px; font-weight:700; cursor:pointer; }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; }
+  .toolbar > * { flex:1; min-width:140px; }
+  .idea { background:#fff8dc; border:1px solid #eadfc2; border-left:6px solid #e3b341; border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+  .idea.candidate { border-left-color:#e07b39; background:#fff1e0; }
+  .idea h3 { margin:0 0 4px; font-size:17px; }
+  .meta { font-size:12px; color:#7a6234; }
+  .memo { white-space:pre-wrap; margin:8px 0; font-size:14px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .row button { border:1px solid #d8c690; background:#fff; border-radius:999px; padding:6px 12px; cursor:pointer; font-size:13px; }
+  .hint { font-size:14px; }
+  .empty { text-align:center; color:#7a6234; padding:24px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📒 アプリアイデアメモ帳</h1>
+  <p>思いついたアプリのアイデアを、サッとメモして貯めるノートです。データはこのPC（ブラウザ）の中に保存されます。</p>
+  <button id="installBtn">⬇ このPCにインストール</button>
+</header>
+<main>
+  <section class="card">
+    <h2 style="margin-top:0;font-size:17px;">新しいアイデア</h2>
+    <label for="title">アイデア名</label>
+    <input id="title" type="text" placeholder="例：買い物リスト共有アプリ">
+    <label for="memo">メモ</label>
+    <textarea id="memo" placeholder="どんなアプリか、誰が使うか、など自由に"></textarea>
+    <label for="genre">ジャンル</label>
+    <select id="genre">
+      <option>ゲーム</option><option>便利ツール</option><option>生活</option>
+      <option>学習</option><option>エンタメ</option><option>その他</option>
+    </select>
+    <label for="want">作りたい度</label>
+    <select id="want">
+      <option value="1">★☆☆ いつか</option>
+      <option value="2" selected>★★☆ 気になる</option>
+      <option value="3">★★★ 作りたい！</option>
+    </select>
+    <button class="primary" id="addBtn">追加する</button>
+    <p class="hint" id="hintBox"></p>
+    <button id="hintBtn" style="border:0;background:none;color:#8a5a12;cursor:pointer;text-decoration:underline;">💡 アイデアのヒントを見る</button>
+  </section>
+
+  <section class="card">
+    <div class="toolbar">
+      <input id="search" type="text" placeholder="検索…">
+      <select id="filterGenre">
+        <option value="">ジャンル：すべて</option><option>ゲーム</option><option>便利ツール</option>
+        <option>生活</option><option>学習</option><option>エンタメ</option><option>その他</option>
+      </select>
+      <select id="sort">
+        <option value="new">新しい順</option>
+        <option value="want">作りたい度順</option>
+        <option value="candidate">候補順</option>
+      </select>
+    </div>
+    <p id="count" class="meta"></p>
+    <div id="list"></div>
+    <p id="empty" class="empty">まだアイデアがありません。最初の一つを書いてみよう！</p>
+  </section>
+</main>
+<script>
+const KEY = "app-idea-memo-v1";
+let ideas = [];
+try { ideas = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch(e) { ideas = []; }
+let editingId = null;
+
+const hints = [
+  "毎日やってて面倒なこと、アプリにできない？",
+  "「これがあったらいいのに」と思った瞬間を思い出してみよう",
+  "好きなゲームや趣味を、もっと楽しむためのアプリは？",
+  "友達や家族が困ってたこと、解決できない？",
+  "今の制作（アドオン・WEB）をもっと楽にする道具は？"
+];
+let hintIdx = 0;
+document.getElementById("hintBtn").addEventListener("click", () => {
+  document.getElementById("hintBox").textContent = "ヒント：" + hints[hintIdx % hints.length];
+  hintIdx++;
+});
+
+function save() { localStorage.setItem(KEY, JSON.stringify(ideas)); }
+function stars(n) { return "★".repeat(n) + "☆".repeat(3 - n); }
+function esc(s) { const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
+
+function render() {
+  const q = document.getElementById("search").value.trim();
+  const g = document.getElementById("filterGenre").value;
+  const sort = document.getElementById("sort").value;
+  let list = ideas.filter(i => (!q || (i.title + i.memo).includes(q)) && (!g || i.genre === g));
+  if (sort === "new") list.sort((a,b) => b.created - a.created);
+  if (sort === "want") list.sort((a,b) => b.want - a.want || b.created - a.created);
+  if (sort === "candidate") list.sort((a,b) => (b.candidate?1:0) - (a.candidate?1:0) || b.created - a.created);
+  document.getElementById("count").textContent = "アイデア " + ideas.length + " 件（候補 " + ideas.filter(i=>i.candidate).length + " 件）";
+  document.getElementById("empty").style.display = list.length ? "none" : "block";
+  document.getElementById("list").innerHTML = list.map(i => `
+    <article class="idea ${i.candidate ? "candidate" : ""}">
+      <h3>${esc(i.title)} ${i.candidate ? "★次に作る候補" : ""}</h3>
+      <div class="meta">${esc(i.genre)} ／ 作りたい度 ${stars(i.want)} ／ ${new Date(i.created).toLocaleDateString("ja-JP")}</div>
+      <p class="memo">${esc(i.memo)}</p>
+      <div class="row">
+        <button data-act="cand" data-id="${i.id}">${i.candidate ? "候補をはずす" : "★ 候補にする"}</button>
+        <button data-act="edit" data-id="${i.id}">編集</button>
+        <button data-act="del" data-id="${i.id}">削除</button>
+      </div>
+    </article>`).join("");
+}
+document.getElementById("list").addEventListener("click", (e) => {
+  const btn = e.target.closest("button"); if (!btn) return;
+  const id = btn.dataset.id, act = btn.dataset.act;
+  const item = ideas.find(i => String(i.id) === id); if (!item) return;
+  if (act === "cand") { item.candidate = !item.candidate; save(); render(); }
+  if (act === "del") { if (confirm("このアイデアを削除しますか？")) { ideas = ideas.filter(i => String(i.id) !== id); save(); render(); } }
+  if (act === "edit") {
+    editingId = item.id;
+    document.getElementById("title").value = item.title;
+    document.getElementById("memo").value = item.memo;
+    document.getElementById("genre").value = item.genre;
+    document.getElementById("want").value = String(item.want);
+    document.getElementById("addBtn").textContent = "保存する";
+    window.scrollTo({top:0, behavior:"smooth"});
+  }
+});
+document.getElementById("addBtn").addEventListener("click", () => {
+  const title = document.getElementById("title").value.trim();
+  if (!title) { alert("アイデア名を入れてね"); return; }
+  const data = {
+    title,
+    memo: document.getElementById("memo").value.trim(),
+    genre: document.getElementById("genre").value,
+    want: Number(document.getElementById("want").value)
+  };
+  if (editingId) {
+    Object.assign(ideas.find(i => i.id === editingId), data);
+    editingId = null;
+    document.getElementById("addBtn").textContent = "追加する";
+  } else {
+    ideas.push({ id: Date.now(), created: Date.now(), candidate: false, ...data });
+  }
+  document.getElementById("title").value = "";
+  document.getElementById("memo").value = "";
+  save(); render();
+});
+["search","filterGenre","sort"].forEach(id => document.getElementById(id).addEventListener("input", render));
+render();
+
+// PWA: install prompt
+let deferredPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault(); deferredPrompt = e;
+  document.getElementById("installBtn").style.display = "inline-block";
+});
+document.getElementById("installBtn").addEventListener("click", async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  document.getElementById("installBtn").style.display = "none";
+});
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+</script>
+</body>
+</html>
