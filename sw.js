@@ -1,4 +1,4 @@
-const CACHE = "nice-notepad-v2";
+const CACHE = "nice-notepad-v4";
 const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
